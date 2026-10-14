@@ -133,6 +133,70 @@ class WafTest extends TestCase
         $this->assertSame(200, $this->get('/page', '203.0.113.52'));
     }
 
+    public function testAbuseIp(): void
+    {
+        // une fausse API sur un port libre, le temps du test
+        $port = $this->portLibre();
+        $serveur = proc_open(
+            [PHP_BINARY, '-S', '127.0.0.1:' . $port, __DIR__ . '/Fixtures/fausse_api_abuseip.php'],
+            [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $tuyaux
+        );
+        try {
+            $this->attendrePort($port);
+            $this->kernel(['abuseip' => ['api_url' => 'http://127.0.0.1:' . $port . '/', 'threshold' => 50]]);
+
+            $this->assertSame(403, $this->get('/page', '203.0.113.100'), 'score 87 : refusee');
+            $this->assertSame(200, $this->get('/page', '203.0.113.101'), 'score 49 : sous le seuil');
+            $this->assertSame(403, $this->get('/page', '203.0.113.102'), 'score 50 : le seuil refuse');
+            $this->assertSame(200, $this->get('/page', '203.0.113.103'), 'status false : laissee passer');
+            $this->assertSame(200, $this->get('/page', '203.0.113.104'), 'API en erreur : laissee passer');
+            $this->assertSame(200, $this->get('/page', '127.0.0.1'), 'liste blanche : jamais demandee');
+            $this->assertSame('', $this->bans(), 'une mauvaise reputation ne bannit pas');
+
+            $ip = new CommandTester((new Application($this->kernel))->find('osd84:waf:ip'));
+            $ip->execute(['ip' => '203.0.113.100']);
+            $this->assertStringContainsString('Score AbuseIP : 87 / 100 (seuil 50)', $ip->getDisplay());
+            $this->assertStringContainsString('Reputation    : refusee', $ip->getDisplay());
+        } finally {
+            proc_terminate($serveur);
+            proc_close($serveur);
+        }
+
+        // API coupee : le score reste en cache, l'echec aussi (pas de nouvel appel pendant 5 minutes)
+        $this->assertSame(403, $this->get('/page', '203.0.113.100'));
+        $this->assertSame(200, $this->get('/page', '203.0.113.104'));
+    }
+
+    public function testAbuseIpDesactiveeSansUrl(): void
+    {
+        $ip = new CommandTester((new Application($this->kernel()))->find('osd84:waf:ip'));
+        $ip->execute(['ip' => '203.0.113.105']);
+        $this->assertStringContainsString('AbuseIP       : desactivee', $ip->getDisplay());
+        $this->assertSame(200, $this->get('/page', '203.0.113.105'));
+    }
+
+    private function portLibre(): int
+    {
+        $socket = stream_socket_server('tcp://127.0.0.1:0');
+        $port = (int) substr(strrchr(stream_socket_get_name($socket, false), ':'), 1);
+        fclose($socket);
+        return $port;
+    }
+
+    private function attendrePort(int $port): void
+    {
+        for ($i = 0; $i < 50; $i++) {
+            $connexion = @fsockopen('127.0.0.1', $port, $codeErreur, $erreur, 0.1);
+            if ($connexion) {
+                fclose($connexion);
+                return;
+            }
+            usleep(100000);
+        }
+        $this->fail('la fausse API ne demarre pas');
+    }
+
     public function testMessageDeBanConfigurable(): void
     {
         $kernel = $this->kernel(['ban_message' => 'Acces refuse']);

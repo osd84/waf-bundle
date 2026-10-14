@@ -1,9 +1,9 @@
 # osd84/waf-bundle
 
 Un petit pare-feu applicatif pour Symfony, en fichiers texte, sans base de données.
-Repris du WAF de la librairie aurox (`OsdAurox\Ban`, `OsdAurox\IpInfo`).
+Repris du WAF de la librairie aurox (`OsdAurox\Ban`, `OsdAurox\IpInfo`, `OsdAurox\AbuseIp`).
 
-*A small application firewall for Symfony, in plain text files: honeypots, scan URL patterns, scanner user agents, 404 bursts, GeoIP, IP bans with expiry, optional Apache `.htaccess` sync.*
+*A small application firewall for Symfony, in plain text files: honeypots, scan URL patterns, scanner user agents, 404 bursts, GeoIP, IP reputation (AbuseIPDB score), IP bans with expiry, optional Apache `.htaccess` sync.*
 
 ## Ce qu'il fait
 
@@ -17,6 +17,7 @@ Repris du WAF de la librairie aurox (`OsdAurox\Ban`, `OsdAurox\IpInfo`).
 | Pot de miel (URL que vous choisissez) | 403 | oui |
 | URL ou motif de scan (`/.env`, `/wp-login.php`, `${jndi:`...) | 403 | oui |
 | Pays non autorisé (GeoIP, si configuré) | 403 | non |
+| Mauvaise réputation (score AbuseIPDB ≥ `threshold`, si configuré) | 403 | non |
 | Trop de pages 404 d'un visiteur non connecté (`kernel.exception`) | — | oui |
 
 - Un ban automatique expire au bout de `ban_duration_days` (30 par défaut). La liste manuelle n'expire jamais.
@@ -61,6 +62,9 @@ osd84_waf:
     geoip:
         api_url: ''                                                   # vide = desactive, aucune IP ne sort du serveur
         allowed_countries: []                                         # ex. ['FR'] ; vide = desactive
+    abuseip:
+        api_url: ''                                                   # vide = desactive, aucune IP ne sort du serveur
+        threshold: 50                                                 # score AbuseIPDB (0 a 100) qui refuse l'IP
 ```
 
 ### Les listes
@@ -98,6 +102,18 @@ Des URL qui n'existent pas dans votre appli et qu'aucun humain n'ouvre. Les visi
 - `allowed_countries` est une liste écrite dans le yaml : un nœud tableau n'accepte pas de `%env(...)%`. `api_url`, lui, peut venir d'une variable d'environnement.
 - Le filtre s'applique à tout le site : un utilisateur en voyage est bloqué, sauf par la liste blanche.
 
+### Réputation d'IP (AbuseIPDB)
+
+`abuseip.api_url` est appelée en `GET <api_url>?ip=1.2.3.4&src=<app_name>` et doit répondre
+`{"status": true, "datas": {"info": {"abuseConfidenceScore": 87}}}` (le format de `OsdAurox\AbuseIp` ;
+`score` est accepté à la place de `abuseConfidenceScore`). La clé AbuseIPDB reste chez cette API, jamais dans l'appli.
+
+- Un score ≥ `threshold` (50 par défaut, comme aurox) : 403, **sans bannir** — le score d'une IP baisse quand les signalements cessent.
+- L'API ne répond pas, ou répond `status: false` : on laisse passer, et on ne la redemande pas avant 5 minutes.
+- Le score d'une IP est gardé 7 jours dans `<storage_dir>/cache` (aurox le gardait dans la table `ip_abuse_cache` : plus de base ici).
+- Contrôlée en dernier, après les bans, les motifs et le pays : une IP déjà refusée ne coûte pas d'appel.
+- `threshold` est un entier écrit dans le yaml ; `api_url` peut venir d'une variable d'environnement.
+
 ### `.htaccess` (Apache)
 
 Avec `htaccess.enabled: true`, les IPv4 bannies (liste manuelle et automatique, 1 000 au plus) sont recopiées
@@ -114,13 +130,12 @@ dans un bloc `WAF_BAN` du fichier, en `Require not ip`. Apache les refuse avant 
 php bin/console osd84:waf:bans                      # bans automatiques, avec leur date de fin
 php bin/console osd84:waf:ban 203.0.113.7 "motif"   # bannir a la main
 php bin/console osd84:waf:unban 203.0.113.7         # debannir (la liste manuelle se modifie a la main)
-php bin/console osd84:waf:ip 203.0.113.7            # liste blanche ? bannie ? pays ?
+php bin/console osd84:waf:ip 203.0.113.7            # liste blanche ? bannie ? pays ? score ?
 php bin/console osd84:waf:htaccess                  # recopier les bans dans le .htaccess
 ```
 
 ## Ce qui n'est pas repris d'aurox
 
-- La réputation d'IP par AbuseIPDB.
 - La détection de XSS / d'injection SQL par motifs : les requêtes préparées et l'échappement Twig font le vrai travail,
   et ces motifs donnent surtout des faux positifs.
 

@@ -3,6 +3,7 @@
 namespace Osd84\WafBundle;
 
 use Osd84\DiscordBundle\Discord;
+use Osd84\WafBundle\AbuseIp;
 use Osd84\WafBundle\Command\WafBanCommand;
 use Osd84\WafBundle\Command\WafBansCommand;
 use Osd84\WafBundle\Command\WafHtaccessCommand;
@@ -86,6 +87,18 @@ class Osd84WafBundle extends AbstractBundle
                         ->end()
                     ->end()
                 ->end()
+                ->arrayNode('abuseip')
+                    ->info('Reputation des IP : API de OsdAurox\AbuseIp (?ip=...&src=... -> datas.info.abuseConfidenceScore). Vide = desactive.')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->scalarNode('api_url')->defaultValue('')->end()
+                        ->integerNode('threshold')
+                            ->info('Score AbuseIPDB (0 a 100) a partir duquel l\'IP est refusee')
+                            ->defaultValue(50)
+                            ->min(1)->max(100)
+                        ->end()
+                    ->end()
+                ->end()
             ->end();
     }
 
@@ -133,10 +146,20 @@ class Osd84WafBundle extends AbstractBundle
                 '$logger'        => service('logger')->nullOnInvalid(),
             ]);
 
+        $services->set(AbuseIp::class)
+            ->args([
+                '$apiUrl'   => $config['abuseip']['api_url'],
+                '$seuil'    => $config['abuseip']['threshold'],
+                '$appName'  => $config['app_name'],
+                '$cacheWaf' => service('osd84_waf.cache'),
+                '$logger'   => service('logger')->nullOnInvalid(),
+            ]);
+
         $services->set(WafSubscriber::class)
             ->args([
                 '$waf'             => service(Waf::class),
                 '$geoIp'           => service(GeoIp::class),
+                '$abuseIp'         => service(AbuseIp::class),
                 '$notFoundLimiter' => service('osd84_waf.not_found_limiter'),
                 '$messageBan'      => $config['ban_message'],
                 // facultatif : sans la securite Symfony, on ne sait pas qui est connecte
@@ -152,7 +175,7 @@ class Osd84WafBundle extends AbstractBundle
             ->tag('console.command', ['command' => 'osd84:waf:bans', 'description' => 'WAF : lister les IP bannies automatiquement']);
         $services->set(WafHtaccessCommand::class)->args([service(Waf::class)])
             ->tag('console.command', ['command' => 'osd84:waf:htaccess', 'description' => 'WAF : recopier les IP bannies dans le .htaccess']);
-        $services->set(WafIpCommand::class)->args([service(Waf::class), service(GeoIp::class)])
+        $services->set(WafIpCommand::class)->args([service(Waf::class), service(GeoIp::class), service(AbuseIp::class)])
             ->tag('console.command', ['command' => 'osd84:waf:ip', 'description' => 'WAF : diagnostic d\'une IP']);
     }
 }

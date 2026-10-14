@@ -2,6 +2,7 @@
 
 namespace Osd84\WafBundle\EventSubscriber;
 
+use Osd84\WafBundle\AbuseIp;
 use Osd84\WafBundle\GeoIp;
 use Osd84\WafBundle\Waf;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -19,7 +20,8 @@ use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInt
  *   1. User-Agent de scanner : 404, sans bannir ;
  *   2. IP deja bannie (ban automatique pas encore expire, ou liste manuelle) : 403 ;
  *   3. pot de miel, URL ou motif de scan : l'IP est bannie, 403 ;
- *   4. pays non autorise (GeoIP) : 403, sans bannir.
+ *   4. pays non autorise (GeoIP) : 403, sans bannir ;
+ *   5. mauvaise reputation (score AbuseIPDB >= osd84_waf.abuseip.threshold) : 403, sans bannir.
  * Et a chaque 404 d'un visiteur non connecte : au-dela de osd84_waf.not_found.limit par osd84_waf.not_found.interval, l'IP est bannie.
  *
  * L'IP est celle de Request::getClientIp() : REMOTE_ADDR, pas de X-Forwarded-For (pas de proxy de confiance).
@@ -32,6 +34,7 @@ class WafSubscriber implements EventSubscriberInterface
     public function __construct(
         private Waf $waf,
         private GeoIp $geoIp,
+        private AbuseIp $abuseIp,
         private RateLimiterFactory $notFoundLimiter,
         private string $messageBan = 'Oops !',
         private ?TokenStorageInterface $tokenStorage = null,
@@ -84,6 +87,12 @@ class WafSubscriber implements EventSubscriberInterface
 
         // 4. pays
         if (!$this->geoIp->paysAutorise($ip)) {
+            $event->setResponse(new Response($this->messageBan, Response::HTTP_FORBIDDEN));
+            return;
+        }
+
+        // 5. reputation : pas de ban, le score d'une IP baisse quand les signalements cessent
+        if ($this->abuseIp->estAbusive($ip)) {
             $event->setResponse(new Response($this->messageBan, Response::HTTP_FORBIDDEN));
         }
     }
