@@ -130,6 +130,7 @@ class Osd84WafBundle extends AbstractBundle
                 '$paysAutorises' => $config['geoip']['allowed_countries'],
                 '$appName'       => $config['app_name'],
                 '$cacheWaf'      => service('osd84_waf.cache'),
+                '$logger'        => service('logger')->nullOnInvalid(),
             ]);
 
         $services->set(WafSubscriber::class)

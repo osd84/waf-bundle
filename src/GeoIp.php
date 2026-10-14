@@ -2,6 +2,7 @@
 
 namespace Osd84\WafBundle;
 
+use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -26,6 +27,7 @@ class GeoIp
         private array $paysAutorises,
         private string $appName,
         private CacheInterface $cacheWaf,
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -69,13 +71,13 @@ class GeoIp
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, self::TIMEOUT_SECONDES);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'divadoc');
+        curl_setopt($ch, CURLOPT_USERAGENT, 'osd84-waf-bundle');
         $reponse = curl_exec($ch);
         $codeHttp = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
         if ($codeHttp !== 200 || !is_string($reponse)) {
-            error_log('GeoIp : l\'API ne repond pas (IP ' . $ip . ', code HTTP ' . $codeHttp . ')');
+            $this->logger?->warning('GeoIp : l\'API ne repond pas (IP {ip}, code HTTP {code})', ['ip' => $ip, 'code' => $codeHttp]);
             return '';
         }
 

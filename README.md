@@ -93,8 +93,9 @@ Des URL qui n'existent pas dans votre appli et qu'aucun humain n'ouvre. Les visi
 `api_url` est appelée en `GET <api_url>?ip=1.2.3.4&src=<app_name>` et doit répondre
 `{"datas": {"info": {"country_code": "FR"}}}` (le format de `OsdAurox\IpInfo`).
 
-- L'API ne répond pas : on laisse passer, et on ne la redemande pas avant 5 minutes.
+- L'API ne répond pas : on laisse passer, et on ne la redemande pas avant 5 minutes (un `warning` part dans le logger de l'appli).
 - Le pays d'une IP est gardé 30 jours dans `<storage_dir>/cache`.
+- `allowed_countries` est une liste écrite dans le yaml : un nœud tableau n'accepte pas de `%env(...)%`. `api_url`, lui, peut venir d'une variable d'environnement.
 - Le filtre s'applique à tout le site : un utilisateur en voyage est bloqué, sauf par la liste blanche.
 
 ### `.htaccess` (Apache)
