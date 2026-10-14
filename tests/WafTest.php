@@ -257,6 +257,24 @@ class WafTest extends TestCase
         return new Waf($this->dossier . '/whitelist.txt', $this->dossier . '/banlist.txt', $this->dossier, true, $htaccess, 'test', ['/admin'], 30);
     }
 
+    public function testHtaccessResteLisibleParApache(): void
+    {
+        $htaccess = $this->dossier . '/.htaccess';
+        file_put_contents($htaccess, "RewriteEngine On\n");
+        chmod($htaccess, 0644);
+        file_put_contents($this->dossier . '/banlist.txt', "198.51.100.7\n");
+
+        // session SSH stricte : un fichier neuf naitrait en 600, illisible pour Apache
+        $umask = umask(077);
+        try {
+            $this->assertTrue($this->wafAvecHtaccess($htaccess)->reconstruireHtaccess());
+        } finally {
+            umask($umask);
+        }
+        clearstatcache();
+        $this->assertSame(0644, fileperms($htaccess) & 0777);
+    }
+
     public function testHtaccess(): void
     {
         $htaccess = $this->dossier . '/.htaccess';

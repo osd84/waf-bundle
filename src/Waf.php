@@ -452,6 +452,9 @@ class Waf
         if (file_put_contents($temporaire, $nouveau, LOCK_EX) === false) {
             return false;
         }
+        // le fichier neuf prend les droits du umask (600 sur une session SSH stricte) : Apache ne pourrait plus
+        // le lire et refuserait tout le site. On lui redonne les droits de l'ancien, lisible par tous au minimum.
+        chmod($temporaire, (fileperms($this->fichierHtaccess) & 0777) | 0444);
         return rename($temporaire, $this->fichierHtaccess);
     }
 
