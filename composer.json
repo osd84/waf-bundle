@@ -1,0 +1,42 @@
+{
+    "name": "osd84/waf-bundle",
+    "description": "Symfony bundle: a small application firewall in plain text files (honeypots, scan URL patterns, scanner user agents, 404 bursts, GeoIP, IP bans with expiry, Apache .htaccess sync).",
+    "type": "symfony-bundle",
+    "license": "MIT",
+    "keywords": ["symfony", "bundle", "waf", "firewall", "honeypot", "ban", "geoip", "security"],
+    "authors": [
+        {"name": "osd84", "homepage": "https://github.com/osd84"}
+    ],
+    "require": {
+        "php": ">=8.2",
+        "ext-curl": "*",
+        "osd84/discord-bundle": "dev-main || ^1.0",
+        "symfony/cache": "^7.4",
+        "symfony/config": "^7.4",
+        "symfony/console": "^7.4",
+        "symfony/dependency-injection": "^7.4",
+        "symfony/event-dispatcher": "^7.4",
+        "symfony/http-foundation": "^7.4",
+        "symfony/http-kernel": "^7.4",
+        "symfony/rate-limiter": "^7.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5",
+        "symfony/framework-bundle": "^7.4"
+    },
+    "suggest": {
+        "symfony/security-bundle": "Les rafales de 404 d'un utilisateur connecte ne sont alors pas comptees"
+    },
+    "repositories": [
+        {"type": "git", "url": "https://github.com/osd84/discord-bundle"}
+    ],
+    "autoload": {
+        "psr-4": {"Osd84\\WafBundle\\": "src/"}
+    },
+    "autoload-dev": {
+        "psr-4": {"Osd84\\WafBundle\\Tests\\": "tests/"}
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
